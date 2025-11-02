@@ -210,8 +210,8 @@ test:
 
 ```bash
 # Clone repository
-git clone https://github.com/QAStudio-Dev/pytest.git
-cd pytest
+git clone https://github.com/QAStudio-Dev/playwright-reporter-python.git
+cd playwright-reporter-python
 
 # Create virtual environment
 python -m venv venv
@@ -239,5 +239,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Support
 
 - 📧 Email: ben@qastudio.dev
-- 🐛 Issues: https://github.com/QAStudio-Dev/pytest/issues
+- 🐛 Issues: https://github.com/QAStudio-Dev/playwright-reporter-python/issues
 - 📖 Documentation: https://qastudio.dev/docs

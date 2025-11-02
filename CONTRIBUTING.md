@@ -6,8 +6,8 @@ Thank you for your interest in contributing to qastudio-pytest!
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/QAStudio-Dev/pytest.git
-   cd pytest
+   git clone https://github.com/QAStudio-Dev/playwright-reporter-python.git
+   cd playwright-reporter-python
    ```
 
 2. **Create a virtual environment**:

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "qastudio-pytest"
 version = "1.0.0"
 description = "pytest plugin for QAStudio.dev test management platform"
-authors = [{name = "QAStudio", email = "support@qastudio.dev"}]
+authors = [{name = "QAStudio", email = "ben@qastudio.dev"}]
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.8"
@@ -42,10 +42,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/QAStudio-Dev/pytest"
-Repository = "https://github.com/QAStudio-Dev/pytest"
-Issues = "https://github.com/QAStudio-Dev/pytest/issues"
-Documentation = "https://github.com/QAStudio-Dev/pytest#readme"
+Homepage = "https://github.com/QAStudio-Dev/playwright-reporter-python"
+Repository = "https://github.com/QAStudio-Dev/playwright-reporter-python"
+Issues = "https://github.com/QAStudio-Dev/playwright-reporter-python/issues"
+Documentation = "https://github.com/QAStudio-Dev/playwright-reporter-python#readme"
 
 [project.entry-points.pytest11]
 qastudio = "qastudio_pytest.plugin"

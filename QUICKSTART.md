@@ -113,5 +113,5 @@ pytest --qastudio-verbose
 
 ## Support
 
-- Issues: https://github.com/QAStudio-Dev/pytest/issues
-- Email: support@qastudio.dev
+- Issues: https://github.com/QAStudio-Dev/playwright-reporter-python/issues
+- Email: ben@qastudio.dev
