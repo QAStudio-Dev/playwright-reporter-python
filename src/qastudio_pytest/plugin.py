@@ -1,7 +1,7 @@
 """pytest plugin for QAStudio.dev integration."""
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 import pytest
 
 from .api_client import QAStudioAPIClient, APIError

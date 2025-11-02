@@ -39,7 +39,7 @@ class TestResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API submission."""
-        result = {
+        result: Dict[str, Any] = {
             "testCaseId": self.test_case_id,
             "title": self.title,
             "fullTitle": self.full_title,

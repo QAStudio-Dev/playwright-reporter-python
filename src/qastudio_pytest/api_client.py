@@ -1,6 +1,5 @@
 """API client for QAStudio.dev integration."""
 
-import time
 from typing import Any, Dict, List, Optional
 import requests
 from requests.adapters import HTTPAdapter
@@ -92,7 +91,8 @@ class QAStudioAPIClient:
 
             # Return JSON if present
             if response.content:
-                return response.json()
+                json_response: Dict[str, Any] = response.json()
+                return json_response
             return {}
 
         except requests.exceptions.Timeout as e:

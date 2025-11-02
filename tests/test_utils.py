@@ -1,6 +1,5 @@
 """Tests for utility functions."""
 
-import pytest
 from qastudio_pytest.utils import (
     extract_test_case_id,
     format_duration,
