@@ -144,11 +144,28 @@ The repository uses GitHub Actions for automated releases and publishing:
 2. **`.github/workflows/release.yml`** - Creates releases (manual trigger)
 3. **`.github/workflows/publish.yml`** - Publishes to PyPI on release
 
-Workflow requirements:
-- `PYPI_TOKEN` secret must be set in GitHub repository settings
-- Token should have upload permissions for `qastudio-pytest` package
+**Quick Release Process:**
 
-See `.github/WORKFLOWS.md` for complete documentation.
+1. Go to **Actions** → **Create Release** → **Run workflow**
+2. Enter version (e.g., `1.0.0`)
+3. Click **Run workflow**
+4. The workflow will automatically:
+   - Run tests
+   - Update version in files
+   - Create GitHub Release with tag
+   - Trigger publish workflow to PyPI
+
+**Required Secrets:**
+- `PYPI_API_TOKEN` - PyPI API token (required for publishing)
+- `TEST_PYPI_API_TOKEN` - TestPyPI token (optional, for testing)
+
+**Setup PyPI Token:**
+1. Go to https://pypi.org/manage/account/
+2. Create API token with scope for `qastudio-pytest`
+3. Add to GitHub repo: Settings → Secrets → Actions → New repository secret
+4. Name: `PYPI_API_TOKEN`, Value: your token
+
+See [`.github/WORKFLOWS.md`](.github/WORKFLOWS.md) for complete documentation.
 
 ### Manual
 
