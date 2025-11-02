@@ -3,15 +3,19 @@ name: Create Release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version number (e.g., 1.0.0)'
+      version_bump:
+        description: 'Version bump type'
         required: true
-        type: string
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
       prerelease:
-        description: 'Is this a pre-release?'
+        description: 'Pre-release suffix (e.g., beta.1, rc.1) - leave empty for stable release'
         required: false
-        type: boolean
-        default: false
+        type: string
 
 jobs:
   create-release:
@@ -30,17 +34,49 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Validate version format
+      - name: Calculate new version
+        id: version
         run: |
-          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
-            echo "Error: Invalid version format. Use semantic versioning (e.g., 1.0.0 or 1.0.0-beta.1)"
-            exit 1
+          # Get current version from pyproject.toml
+          CURRENT_VERSION=$(grep -oP '(?<=version = ")[^"]*' pyproject.toml)
+          echo "Current version: $CURRENT_VERSION"
+
+          # Split version into parts
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          # Remove any pre-release suffix from patch
+          PATCH=${PATCH%%-*}
+
+          # Bump version based on input
+          case "${{ inputs.version_bump }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          # Construct new version
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+          # Add pre-release suffix if provided
+          if [ -n "${{ inputs.prerelease }}" ]; then
+            NEW_VERSION="${NEW_VERSION}-${{ inputs.prerelease }}"
           fi
 
-      - name: Check if tag exists
-        run: |
-          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
-            echo "Error: Tag v${{ inputs.version }} already exists"
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+          # Check if tag exists
+          if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Error: Tag v$NEW_VERSION already exists"
             exit 1
           fi
 
@@ -55,11 +91,11 @@ jobs:
 
       - name: Update version in pyproject.toml
         run: |
-          sed -i 's/version = ".*"/version = "${{ inputs.version }}"/' pyproject.toml
+          sed -i 's/version = ".*"/version = "${{ steps.version.outputs.version }}"/' pyproject.toml
 
       - name: Update version in __init__.py
         run: |
-          sed -i 's/__version__ = ".*"/__version__ = "${{ inputs.version }}"/' src/qastudio_pytest/__init__.py
+          sed -i 's/__version__ = ".*"/__version__ = "${{ steps.version.outputs.version }}"/' src/qastudio_pytest/__init__.py
 
       - name: Build package
         run: |
@@ -76,13 +112,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pyproject.toml src/qastudio_pytest/__init__.py
-          git commit -m "Bump version to ${{ inputs.version }}"
+          git commit -m "Bump version to ${{ steps.version.outputs.version }}"
           git push
 
       - name: Create Git tag
         run: |
-          git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Generate release notes
         id: release_notes
@@ -106,7 +142,7 @@ jobs:
           ## Installation
 
           \`\`\`bash
-          pip install qastudio-pytest==${{ inputs.version }}
+          pip install qastudio-pytest==${{ steps.version.outputs.version }}
           \`\`\`
 
           ## Full Changelog
@@ -115,17 +151,17 @@ jobs:
           if [ -z "$PREV_TAG" ]; then
             echo "Initial release" >> release_notes.md
           else
-            echo "https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ inputs.version }}" >> release_notes.md
+            echo "https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${{ steps.version.outputs.version }}" >> release_notes.md
           fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ inputs.version }}
-          name: Release v${{ inputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
           body_path: release_notes.md
           draft: false
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ inputs.prerelease != '' }}
           files: |
             dist/*
         env:

@@ -28,30 +28,36 @@ This repository uses GitHub Actions for automated testing, releasing, and publis
 - Manual workflow dispatch via GitHub Actions UI
 
 **Required Inputs:**
-- `version`: Version number (e.g., `1.0.0`, `1.2.3-beta.1`)
-- `prerelease`: Boolean flag for pre-release versions (default: `false`)
+- `version_bump`: Dropdown to select version bump type (patch, minor, major)
+- `prerelease`: Optional pre-release suffix (e.g., `beta.1`, `rc.1`) - leave empty for stable release
 
 **What it does:**
-1. Validates version format (semantic versioning)
-2. Checks that the tag doesn't already exist
-3. Runs full test suite
-4. Updates version in `pyproject.toml` and `src/qastudio_pytest/__init__.py`
-5. Builds the package
-6. Commits version bump
-7. Creates and pushes a git tag (`v{version}`)
-8. Generates release notes from git commits
-9. Creates a GitHub Release with built artifacts
+1. Reads current version from `pyproject.toml`
+2. Automatically calculates new version based on bump type
+3. Checks that the tag doesn't already exist
+4. Runs full test suite
+5. Updates version in `pyproject.toml` and `src/qastudio_pytest/__init__.py`
+6. Builds the package
+7. Commits version bump
+8. Creates and pushes a git tag (`v{version}`)
+9. Generates release notes from git commits
+10. Creates a GitHub Release with built artifacts
 
 **How to use:**
 1. Go to **Actions** → **Create Release**
 2. Click **Run workflow**
-3. Enter the version number (e.g., `1.0.0`)
-4. Select if it's a pre-release
+3. Select version bump type:
+   - **Patch** (1.0.0 → 1.0.1): Bug fixes, backward compatible
+   - **Minor** (1.0.0 → 1.1.0): New features, backward compatible
+   - **Major** (1.0.0 → 2.0.0): Breaking changes
+4. (Optional) Enter pre-release suffix (e.g., `beta.1`, `rc.1`)
 5. Click **Run workflow**
 
-**Example versions:**
-- Release: `1.0.0`, `2.1.3`
-- Pre-release: `1.0.0-beta.1`, `2.0.0-rc.1`
+**Example version bumps:**
+- Current: `1.2.3` + Patch → `1.2.4`
+- Current: `1.2.3` + Minor → `1.3.0`
+- Current: `1.2.3` + Major → `2.0.0`
+- Current: `1.2.3` + Patch + `beta.1` → `1.2.4-beta.1`
 
 ---
 
@@ -93,10 +99,12 @@ This repository uses GitHub Actions for automated testing, releasing, and publis
 1. **Create a Release**
    ```
    GitHub → Actions → Create Release → Run workflow
-   Enter version: 1.0.0
+   Select: Patch, Minor, or Major
+   Pre-release: (leave empty for stable release)
    ```
 
 2. **GitHub Actions will:**
+   - Calculate new version automatically
    - Run tests
    - Update version files
    - Create git tag

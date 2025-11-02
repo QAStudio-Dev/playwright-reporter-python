@@ -147,9 +147,14 @@ The repository uses GitHub Actions for automated releases and publishing:
 **Quick Release Process:**
 
 1. Go to **Actions** → **Create Release** → **Run workflow**
-2. Enter version (e.g., `1.0.0`)
-3. Click **Run workflow**
-4. The workflow will automatically:
+2. Select version bump type from dropdown:
+   - **Patch** (1.0.0 → 1.0.1): Bug fixes, backward compatible
+   - **Minor** (1.0.0 → 1.1.0): New features, backward compatible
+   - **Major** (1.0.0 → 2.0.0): Breaking changes
+3. (Optional) Enter pre-release suffix (e.g., `beta.1`, `rc.1`)
+4. Click **Run workflow**
+5. The workflow will automatically:
+   - Calculate new version from current version
    - Run tests
    - Update version in files
    - Create GitHub Release with tag
