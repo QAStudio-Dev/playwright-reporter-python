@@ -148,9 +148,7 @@ class QAStudioPlugin:
             return
 
         batches = batch_list(self.results, self.config.batch_size)
-        self._log(
-            f"Submitting {len(self.results)} results in {len(batches)} batch(es)"
-        )
+        self._log(f"Submitting {len(self.results)} results in {len(batches)} batch(es)")
 
         for i, batch in enumerate(batches, 1):
             try:

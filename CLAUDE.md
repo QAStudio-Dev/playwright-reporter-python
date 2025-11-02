@@ -13,7 +13,12 @@ This is `qastudio-pytest`, a Python package that provides a pytest plugin for QA
 
 ## Build Commands
 
+**IMPORTANT**: This project uses a virtual environment located at `venv/`. Always activate it before running commands:
+
 ```bash
+# Activate virtual environment (required for all commands below)
+source venv/bin/activate
+
 # Install dependencies for development
 pip install -e ".[dev]"
 
@@ -29,7 +34,7 @@ mypy src/qastudio_pytest
 # Linting
 ruff check src/ tests/
 
-# Format code
+# Format code (ALWAYS run before committing)
 black src/ tests/
 
 # Build package
@@ -248,6 +253,36 @@ The plugin can be configured via multiple methods (in priority order):
 
 ## Development
 
+### Development Workflow
+
+**IMPORTANT**: Always use the virtual environment at `venv/` for all development work:
+
+```bash
+# Activate virtual environment first
+source venv/bin/activate
+
+# If black is not installed, install it
+pip install black
+```
+
+### Pre-Commit Checklist
+
+Before committing any changes, ALWAYS run:
+
+```bash
+# 1. Format code with black (REQUIRED)
+black src/ tests/
+
+# 2. Run tests
+pytest
+
+# 3. Check types
+mypy src/qastudio_pytest
+
+# 4. Run linting
+ruff check src/ tests/
+```
+
 ### Adding New Features
 
 1. Update relevant module in `src/qastudio_pytest/`
@@ -255,7 +290,7 @@ The plugin can be configured via multiple methods (in priority order):
 3. Update type hints and docstrings
 4. Run tests: `pytest`
 5. Check types: `mypy src/qastudio_pytest`
-6. Format code: `black src/ tests/`
+6. **Format code: `black src/ tests/` (REQUIRED before commit)**
 
 ### Common Tasks
 

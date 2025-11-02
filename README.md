@@ -238,6 +238,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
-- 📧 Email: support@qastudio.dev
+- 📧 Email: ben@qastudio.dev
 - 🐛 Issues: https://github.com/QAStudio-Dev/pytest/issues
-- 📖 Documentation: https://docs.qastudio.dev
+- 📖 Documentation: https://qastudio.dev/docs
