@@ -444,10 +444,13 @@ def pytest_configure(config: Any) -> None:
 
     Registers the plugin if API key is provided.
     """
+    import os
+
     # Check if we have minimum required config
     api_key = (
         config.getini("qastudio_api_key")
         or config.getoption("--qastudio-api-key", default=None)
+        or os.environ.get("QASTUDIO_API_KEY")
         or None
     )
 
@@ -462,7 +465,16 @@ def pytest_configure(config: Any) -> None:
         # Validate config
         validate_config(reporter_config)
 
-        # Register plugin
+        # Check if an instance of QAStudioPlugin is already registered
+        existing_plugin = config.pluginmanager.get_plugin("qastudio")
+        if existing_plugin and isinstance(existing_plugin, QAStudioPlugin):
+            # Plugin instance already registered, skip
+            return
+        elif existing_plugin:
+            # Module is registered (from entry point), unregister it first
+            config.pluginmanager.unregister(existing_plugin)
+
+        # Register plugin instance
         plugin = QAStudioPlugin(reporter_config)
         config.pluginmanager.register(plugin, "qastudio")
 

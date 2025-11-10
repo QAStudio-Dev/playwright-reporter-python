@@ -42,32 +42,23 @@ class TestResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API submission."""
         result: Dict[str, Any] = {
-            "testCaseId": self.test_case_id,
             "title": self.title,
-            "fullTitle": self.full_title,
             "status": self.status.value,
             "duration": int(self.duration * 1000),  # Convert to milliseconds
-            "error": self.error,
-            "stackTrace": self.stack_trace,
-            "startTime": self.start_time,
-            "endTime": self.end_time,
-            "metadata": {
-                **self.metadata,
-                "filePath": self.file_path,
-                "lineNumber": self.line_number,
-            },
         }
 
-        # Add optional fields if present
-        if self.error_snippet is not None:
-            result["errorSnippet"] = self.error_snippet
-        if self.error_location is not None:
-            result["errorLocation"] = self.error_location
-        if self.steps is not None:
-            result["steps"] = self.steps
-        if self.console_output is not None:
-            result["consoleOutput"] = self.console_output
-        if self.attachments is not None:
+        # Add optional fields that the API expects
+        if self.full_title:
+            result["fullTitle"] = self.full_title
+
+        if self.error:
+            result["errorMessage"] = self.error
+
+        if self.stack_trace:
+            result["stackTrace"] = self.stack_trace
+
+        # Add attachments array if present
+        if self.attachments:
             result["attachments"] = self.attachments
 
         return result
