@@ -206,7 +206,7 @@ class QAStudioPlugin:
         import os
         import glob
 
-        attachments = []
+        attachments: List[str] = []
 
         # Check if test has attachment paths stored as attribute
         # This is set by test fixtures (e.g., Playwright conftest)
