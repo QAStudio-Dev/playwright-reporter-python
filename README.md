@@ -206,6 +206,36 @@ test:
     QASTUDIO_ENVIRONMENT: CI
 ```
 
+## Examples
+
+### Playwright Example
+
+A complete Playwright test framework example is available in `examples/playwright_tests/`:
+
+```bash
+# Navigate to example directory
+cd examples/playwright_tests
+
+# Install dependencies
+pip install -r requirements.txt
+playwright install chromium
+
+# Run the tests
+./run_tests.sh
+
+# Or run directly with pytest
+pytest -v
+```
+
+The example demonstrates:
+- ✅ Testing the QAStudio.dev website
+- ✅ Automatic screenshot capture
+- ✅ Playwright trace recording (`.zip` files)
+- ✅ Integration with qastudio-pytest reporter
+- ✅ Test case linking with `@pytest.mark.qastudio_id()`
+
+See [`examples/playwright_tests/README.md`](examples/playwright_tests/README.md) for detailed documentation.
+
 ## Development
 
 ```bash

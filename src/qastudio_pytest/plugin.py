@@ -76,6 +76,11 @@ class QAStudioPlugin:
         if report.when == "call":
             try:
                 result = TestResult.from_pytest_report(item, report, self.config)
+
+                # Collect attachments if enabled
+                if self.config.upload_attachments:
+                    result.attachment_paths = self._collect_attachments(item)
+
                 self.results.append(result)
 
                 # Update counters
@@ -142,7 +147,7 @@ class QAStudioPlugin:
             self.api_client.close()
 
     def _submit_results(self) -> None:
-        """Submit test results in batches."""
+        """Submit test results in batches and upload attachments."""
         if not self.results:
             self._log("No results to submit")
             return
@@ -153,12 +158,121 @@ class QAStudioPlugin:
         for i, batch in enumerate(batches, 1):
             try:
                 self._log(f"Submitting batch {i}/{len(batches)} ({len(batch)} results)")
-                self.api_client.submit_test_results(
+                response = self.api_client.submit_test_results(
                     self.test_run_id,  # type: ignore
                     batch,
                 )
+
+                # Store result IDs for attachment uploads
+                if response and "results" in response:
+                    for j, result_data in enumerate(response["results"]):
+                        if j < len(batch):
+                            batch[j].result_id = result_data.get("id")
+
+                # Upload attachments if enabled
+                if self.config.upload_attachments:
+                    for result in batch:
+                        if result.result_id and result.attachment_paths:
+                            self._upload_attachments(result)
+
             except APIError as e:
                 self._handle_error(f"Failed to submit batch {i}", e)
+
+    def _collect_attachments(self, item: Any) -> List[str]:
+        """
+        Collect attachment file paths for a test.
+
+        Looks for attachments in:
+        1. Custom attachments directory (if configured)
+        2. pytest-html plugin screenshots
+        3. Test fixtures that store attachment paths
+
+        Args:
+            item: pytest test item
+
+        Returns:
+            List of file paths to attach
+        """
+        import os
+        import glob
+
+        attachments = []
+
+        # Check if test has attachment paths stored in stash or fixtures
+        if hasattr(item, "stash"):
+            # pytest >= 7.0 uses stash API
+            from pytest import StashKey
+
+            attachment_key = StashKey[List[str]]()
+            stored_attachments = item.stash.get(attachment_key, [])
+            attachments.extend(stored_attachments)
+
+        # Check custom attachments directory
+        if self.config.attachments_dir:
+            test_name = item.name.replace("[", "_").replace("]", "_")
+            attachment_dir = os.path.join(self.config.attachments_dir, test_name)
+
+            if os.path.exists(attachment_dir):
+                # Find common attachment types
+                patterns = [
+                    "*.png",
+                    "*.jpg",
+                    "*.jpeg",
+                    "*.gif",
+                    "*.mp4",
+                    "*.webm",
+                    "*.txt",
+                    "*.log",
+                    "*.zip",
+                ]
+                for pattern in patterns:
+                    files = glob.glob(os.path.join(attachment_dir, pattern))
+                    attachments.extend(files)
+
+        return attachments
+
+    def _upload_attachments(self, result: TestResult) -> None:
+        """
+        Upload attachments for a test result.
+
+        Args:
+            result: TestResult with attachment_paths and result_id
+        """
+        if not result.result_id or not result.attachment_paths:
+            return
+
+        self._log(f"Uploading {len(result.attachment_paths)} attachment(s) for {result.title}")
+
+        for file_path in result.attachment_paths:
+            try:
+                # Determine attachment type from file extension
+                import os
+
+                ext = os.path.splitext(file_path)[1].lower()
+                filename = os.path.basename(file_path)
+                attachment_type = None
+
+                if ext in [".png", ".jpg", ".jpeg", ".gif"]:
+                    attachment_type = "screenshot"
+                elif ext in [".mp4", ".webm", ".avi", ".mov"]:
+                    attachment_type = "video"
+                elif ext in [".log", ".txt"]:
+                    attachment_type = "log"
+                elif ext == ".zip" and "trace" in filename.lower():
+                    attachment_type = "trace"
+
+                self.api_client.upload_attachment(
+                    test_result_id=result.result_id,
+                    file_path=file_path,
+                    attachment_type=attachment_type,
+                )
+
+                self._log(f"  Uploaded: {os.path.basename(file_path)}")
+
+            except APIError as e:
+                self._handle_error(f"Failed to upload attachment {file_path}", e)
+            except Exception as e:
+                self._log(f"  Error uploading {file_path}: {e}")
 
     def _log(self, message: str) -> None:
         """Log message if verbose mode is enabled."""
@@ -269,6 +383,21 @@ def pytest_addoption(parser: Any) -> None:
         help="Include console output (default: False)",
     )
 
+    group.addoption(
+        "--qastudio-upload-attachments",
+        action="store_true",
+        dest="qastudio_upload_attachments",
+        default=True,
+        help="Upload test attachments (default: True)",
+    )
+
+    group.addoption(
+        "--qastudio-attachments-dir",
+        action="store",
+        dest="qastudio_attachments_dir",
+        help="Directory containing test attachments",
+    )
+
     # Add pytest.ini configuration
     parser.addini("qastudio_api_url", "QAStudio.dev API URL")
     parser.addini("qastudio_api_key", "QAStudio.dev API key")
@@ -298,6 +427,14 @@ def pytest_addoption(parser: Any) -> None:
     parser.addini(
         "qastudio_include_console_output",
         "Include console output (true/false)",
+    )
+    parser.addini(
+        "qastudio_upload_attachments",
+        "Upload test attachments (true/false)",
+    )
+    parser.addini(
+        "qastudio_attachments_dir",
+        "Directory containing test attachments",
     )
 
 

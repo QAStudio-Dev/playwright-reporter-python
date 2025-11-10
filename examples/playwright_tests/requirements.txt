@@ -1,0 +1,10 @@
+# Playwright testing framework
+playwright>=1.40.0
+pytest-playwright>=0.4.4
+
+# QAStudio.dev reporter
+qastudio-pytest>=1.0.0
+
+# Additional testing utilities
+pytest>=7.0.0
+pytest-xdist>=3.0.0  # Parallel test execution

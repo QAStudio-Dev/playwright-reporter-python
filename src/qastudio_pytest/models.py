@@ -35,7 +35,9 @@ class TestResult:
     file_path: Optional[str] = None
     line_number: Optional[int] = None
     attachments: Optional[List[Dict[str, Any]]] = None
+    attachment_paths: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    result_id: Optional[str] = None  # API result ID for uploading attachments
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API submission."""
@@ -205,6 +207,8 @@ class ReporterConfig:
     include_error_location: bool = True
     include_test_steps: bool = True
     include_console_output: bool = False
+    upload_attachments: bool = True
+    attachments_dir: Optional[str] = None
 
     @classmethod
     def from_pytest_config(cls, config: Any) -> "ReporterConfig":
@@ -259,4 +263,6 @@ class ReporterConfig:
             include_error_location=get_option("qastudio_include_error_location", True),
             include_test_steps=get_option("qastudio_include_test_steps", True),
             include_console_output=get_option("qastudio_include_console_output", False),
+            upload_attachments=get_option("qastudio_upload_attachments", True),
+            attachments_dir=get_option("qastudio_attachments_dir"),
         )

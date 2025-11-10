@@ -82,11 +82,12 @@ The package consists of four main modules in `src/qastudio_pytest/`:
 
 1. **`pytest_configure`**: Registers plugin if API key is configured
 2. **`pytest_sessionstart`**: Creates test run via API (or uses existing test_run_id)
-3. **`pytest_runtest_makereport`**: Collects test results during execution (call phase only)
+3. **`pytest_runtest_makereport`**: Collects test results and attachments during execution (call phase only)
 4. **`pytest_sessionfinish`**:
    - Converts all test results to QAStudio.dev format
    - Batches results (default: 10 per batch)
    - Submits batches sequentially with error handling
+   - Uploads attachments for each test result (if enabled)
    - Completes test run with summary stats
 
 ### Key Design Patterns
@@ -238,8 +239,8 @@ Key default values in reporter configuration:
 - `create_test_run`: `True`
 - `verbose`: `False`
 - `batch_size`: `10`
-- `upload_screenshots`: `True`
-- `upload_videos`: `True`
+- `upload_attachments`: `True`
+- `attachments_dir`: `None` (searches in pytest stash or custom directory)
 - `max_retries`: `3`
 - `timeout`: `30` (30 seconds)
 - `silent`: `True`
@@ -270,8 +271,61 @@ The plugin can be configured via multiple methods (in priority order):
 
 - **`pytest_configure(config)`**: Plugin registration
 - **`pytest_sessionstart(session)`**: Test run creation (tryfirst=True)
-- **`pytest_runtest_makereport(item, call)`**: Result collection (hookwrapper=True)
-- **`pytest_sessionfinish(session)`**: Result submission (trylast=True)
+- **`pytest_runtest_makereport(item, call)`**: Result and attachment collection (hookwrapper=True)
+- **`pytest_sessionfinish(session)`**: Result submission and attachment uploads (trylast=True)
+
+## Attachment Handling
+
+The plugin supports automatic attachment uploads via the `/attachments` endpoint:
+
+### Attachment Collection
+
+Attachments are collected during test execution from:
+
+1. **Pytest Stash API** (pytest >= 7.0): Store attachment paths in `item.stash`
+2. **Custom Attachments Directory**: Configure `attachments_dir` to specify a directory structure:
+   ```
+   attachments/
+     test_name_1/
+       screenshot.png
+       trace.log
+     test_name_2/
+       video.mp4
+   ```
+
+### Supported File Types
+
+- **Screenshots**: `.png`, `.jpg`, `.jpeg`, `.gif`
+- **Videos**: `.mp4`, `.webm`, `.avi`, `.mov`
+- **Logs**: `.log`, `.txt`
+- **Traces**: `.zip` (e.g., `trace.zip` from Playwright)
+
+### Upload Workflow
+
+1. Test results are submitted in batches to `/results` endpoint
+2. API returns result IDs for each test
+3. Plugin uploads attachments to `/attachments` endpoint with multipart/form-data
+4. Each attachment includes:
+   - `testResultId`: The result ID from step 2
+   - `file`: The file data with proper MIME type
+   - `type`: Optional attachment type (screenshot, video, log, trace)
+
+### Configuration
+
+```bash
+# Enable/disable attachment uploads (default: true)
+pytest --qastudio-upload-attachments
+
+# Specify custom attachments directory
+pytest --qastudio-attachments-dir=./test-results/attachments
+```
+
+Or in `pytest.ini`:
+```ini
+[pytest]
+qastudio_upload_attachments = true
+qastudio_attachments_dir = ./test-results/attachments
+```
 
 ## Development
 
