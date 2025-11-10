@@ -77,9 +77,8 @@ class QAStudioPlugin:
             try:
                 result = TestResult.from_pytest_report(item, report, self.config)
 
-                # Collect attachments if enabled
-                if self.config.upload_attachments:
-                    result.attachment_paths = self._collect_attachments(item)
+                # Store the item reference for later attachment collection
+                result.metadata["pytest_item"] = item
 
                 self.results.append(result)
 
@@ -152,6 +151,17 @@ class QAStudioPlugin:
             self._log("No results to submit")
             return
 
+        # Collect attachments now that all fixtures have torn down
+        if self.config.upload_attachments:
+            self._log("Collecting attachments from test items...")
+            for result in self.results:
+                if "pytest_item" in result.metadata:
+                    item = result.metadata["pytest_item"]
+                    result.attachment_paths = self._collect_attachments(item)
+                    self._log(
+                        f"Found {len(result.attachment_paths)} attachment(s) for {result.title}"
+                    )
+
         batches = batch_list(self.results, self.config.batch_size)
         self._log(f"Submitting {len(self.results)} results in {len(batches)} batch(es)")
 
@@ -167,7 +177,7 @@ class QAStudioPlugin:
                 if response and "results" in response:
                     for j, result_data in enumerate(response["results"]):
                         if j < len(batch):
-                            batch[j].result_id = result_data.get("id")
+                            batch[j].result_id = result_data.get("testResultId")
 
                 # Upload attachments if enabled
                 if self.config.upload_attachments:
@@ -198,14 +208,12 @@ class QAStudioPlugin:
 
         attachments = []
 
-        # Check if test has attachment paths stored in stash or fixtures
-        if hasattr(item, "stash"):
-            # pytest >= 7.0 uses stash API
-            from pytest import StashKey
-
-            attachment_key = StashKey[List[str]]()
-            stored_attachments = item.stash.get(attachment_key, [])
-            attachments.extend(stored_attachments)
+        # Check if test has attachment paths stored as attribute
+        # This is set by test fixtures (e.g., Playwright conftest)
+        if hasattr(item, "_qastudio_attachments"):
+            stored_attachments = getattr(item, "_qastudio_attachments", [])
+            if stored_attachments:
+                attachments.extend(stored_attachments)
 
         # Check custom attachments directory
         if self.config.attachments_dir:
