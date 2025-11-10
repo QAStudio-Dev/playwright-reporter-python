@@ -66,6 +66,20 @@ python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+exclude = [
+    "venv/",
+    ".venv/",
+    "build/",
+    "dist/",
+]
+
+# Ignore errors in installed packages
+[[tool.mypy.overrides]]
+module = [
+    "pytest.*",
+    "_pytest.*",
+]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
