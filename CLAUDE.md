@@ -10,6 +10,7 @@ This is `qastudio-pytest`, a Python package that provides a pytest plugin for QA
 **Language**: Python
 **Target**: Python >=3.8
 **Peer dependency**: `pytest` ^7.0.0
+**License**: AGPLv3+ (GNU Affero General Public License v3.0 or later)
 
 ## Build Commands
 

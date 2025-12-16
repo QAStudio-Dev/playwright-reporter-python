@@ -264,7 +264,7 @@ python -m build
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3.0 or later (AGPLv3+) - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
