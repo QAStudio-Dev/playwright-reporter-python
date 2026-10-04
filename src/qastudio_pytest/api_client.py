@@ -1,5 +1,6 @@
 """API client for QAStudio.dev integration."""
 
+import time
 from typing import Any, Dict, List, Optional
 import requests
 from requests.adapters import HTTPAdapter
@@ -17,6 +18,9 @@ class APIError(Exception):
         super().__init__(f"API Error {status_code}: {message}")
 
 
+_TRANSIENT_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+
+
 class QAStudioAPIClient:
     """Client for communicating with QAStudio.dev API."""
 
@@ -32,7 +36,8 @@ class QAStudioAPIClient:
         """Create requests session with retry logic."""
         session = requests.Session()
 
-        # Configure retry strategy
+        # Transport retries stay on idempotent verbs. POST /runs is not
+        # idempotent; result submissions retry in submit_test_results instead.
         retry_strategy = Retry(
             total=self.config.max_retries,
             backoff_factor=1,
@@ -102,6 +107,33 @@ class QAStudioAPIClient:
         except requests.exceptions.RequestException as e:
             raise APIError(500, f"Request failed: {str(e)}")
 
+    def _is_retryable(self, error: APIError) -> bool:
+        return error.status_code in _TRANSIENT_STATUS_CODES or error.status_code >= 500
+
+    def _request_with_retry(
+        self,
+        method: str,
+        path: str,
+        json_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Retry transient failures for endpoints that can be safely repeated."""
+        attempts = max(self.config.max_retries, 1)
+        last_error: Optional[APIError] = None
+        for attempt in range(attempts):
+            try:
+                if attempt > 0:
+                    self._log(f"Retry attempt {attempt + 1}/{attempts} for {method} {path}")
+                    time.sleep(min(1 * (2**attempt), 10))
+                return self._make_request(method, path, json_data)
+            except APIError as exc:
+                last_error = exc
+                if not self._is_retryable(exc) or attempt == attempts - 1:
+                    raise
+                self._log(f"{method} {path} failed (attempt {attempt + 1}/{attempts}): {exc}")
+        if last_error:
+            raise last_error
+        raise APIError(500, "Request failed after all retries")
+
     def create_test_run(
         self,
         name: str,
@@ -155,7 +187,7 @@ class QAStudioAPIClient:
             "results": [result.to_dict() for result in results],
         }
 
-        response = self._make_request("POST", "/results", json_data=data)
+        response = self._request_with_retry("POST", "/results", json_data=data)
 
         self._log(f"Successfully submitted {len(results)} results")
         return response

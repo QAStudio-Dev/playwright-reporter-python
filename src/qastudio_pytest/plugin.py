@@ -2,7 +2,7 @@
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import pytest
 
 from .api_client import QAStudioAPIClient, APIError
@@ -13,6 +13,31 @@ from .utils import (
     generate_test_run_name,
     validate_config,
 )
+
+
+def assign_result_ids(batch: List[TestResult], response_results: List[Dict[str, Any]]) -> None:
+    """Map submitted results to API result IDs for later attachment uploads."""
+    if not response_results:
+        return
+
+    used = set()
+    for result in batch:
+        for index, result_data in enumerate(response_results):
+            if index in used:
+                continue
+            if result_data.get("title") == result.title:
+                result.result_id = result_data.get("testResultId")
+                used.add(index)
+                break
+
+    for result in batch:
+        if result.result_id:
+            continue
+        unused = next((index for index in range(len(response_results)) if index not in used), None)
+        if unused is None:
+            return
+        result.result_id = response_results[unused].get("testResultId")
+        used.add(unused)
 
 
 class QAStudioPlugin:
@@ -164,6 +189,7 @@ class QAStudioPlugin:
         batches = batch_list(self.pending_results, self.config.batch_size)
         self._log(f"Submitting {len(self.pending_results)} results in {len(batches)} batch(es)")
 
+        remaining: List[TestResult] = []
         for i, batch in enumerate(batches, 1):
             try:
                 self._log(f"Submitting batch {i}/{len(batches)} ({len(batch)} results)")
@@ -173,25 +199,12 @@ class QAStudioPlugin:
                 )
 
                 if response and "results" in response:
-                    used = set()
-                    for result in batch:
-                        for j, result_data in enumerate(response["results"]):
-                            if j in used:
-                                continue
-                            if result_data.get("title") == result.title:
-                                result.result_id = result_data.get("testResultId")
-                                used.add(j)
-                                break
-                        else:
-                            # Fall back to order when titles are missing
-                            idx = len(used)
-                            if idx < len(response["results"]):
-                                result.result_id = response["results"][idx].get("testResultId")
-                                used.add(idx)
+                    assign_result_ids(batch, response["results"])
             except APIError as e:
+                remaining.extend(batch)
                 self._handle_error(f"Failed to submit batch {i}", e)
 
-        self.pending_results = []
+        self.pending_results = remaining
 
     def _collect_and_upload_attachments(self) -> None:
         """Collect attachment paths after teardown and upload concurrently."""
@@ -217,6 +230,7 @@ class QAStudioPlugin:
             return
 
         self._log(f"Uploading {len(jobs)} attachment(s) concurrently")
+        upload_errors: List[str] = []
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = {
                 executor.submit(self._upload_one_attachment, result, file_path): (result, file_path)
@@ -227,9 +241,11 @@ class QAStudioPlugin:
                 try:
                     future.result()
                 except APIError as e:
-                    self._handle_error(f"Failed to upload attachment {file_path}", e)
+                    upload_errors.append(f"Failed to upload attachment {file_path}: {e}")
                 except Exception as e:
                     self._log(f"  Error uploading {file_path}: {e}")
+        if upload_errors:
+            self._handle_error("Attachment uploads failed", Exception("; ".join(upload_errors)))
 
     def _collect_attachments(self, item: Any) -> List[str]:
         """
