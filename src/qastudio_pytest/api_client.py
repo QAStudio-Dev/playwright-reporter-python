@@ -1,5 +1,6 @@
 """API client for QAStudio.dev integration."""
 
+import time
 from typing import Any, Dict, List, Optional
 import requests
 from requests.adapters import HTTPAdapter
@@ -17,6 +18,9 @@ class APIError(Exception):
         super().__init__(f"API Error {status_code}: {message}")
 
 
+_TRANSIENT_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+
+
 class QAStudioAPIClient:
     """Client for communicating with QAStudio.dev API."""
 
@@ -32,12 +36,13 @@ class QAStudioAPIClient:
         """Create requests session with retry logic."""
         session = requests.Session()
 
-        # Configure retry strategy
+        # Transport retries stay on idempotent verbs. POST /runs is not
+        # idempotent; result submissions retry in submit_test_results instead.
         retry_strategy = Retry(
             total=self.config.max_retries,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"],
+            allowed_methods=["HEAD", "GET", "OPTIONS"],
         )
 
         adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -102,6 +107,33 @@ class QAStudioAPIClient:
         except requests.exceptions.RequestException as e:
             raise APIError(500, f"Request failed: {str(e)}")
 
+    def _is_retryable(self, error: APIError) -> bool:
+        return error.status_code in _TRANSIENT_STATUS_CODES or error.status_code >= 500
+
+    def _request_with_retry(
+        self,
+        method: str,
+        path: str,
+        json_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Retry transient failures for endpoints that can be safely repeated."""
+        attempts = max(self.config.max_retries, 1)
+        last_error: Optional[APIError] = None
+        for attempt in range(attempts):
+            try:
+                if attempt > 0:
+                    self._log(f"Retry attempt {attempt + 1}/{attempts} for {method} {path}")
+                    time.sleep(min(1 * (2**attempt), 10))
+                return self._make_request(method, path, json_data)
+            except APIError as exc:
+                last_error = exc
+                if not self._is_retryable(exc) or attempt == attempts - 1:
+                    raise
+                self._log(f"{method} {path} failed (attempt {attempt + 1}/{attempts}): {exc}")
+        if last_error:
+            raise last_error
+        raise APIError(500, "Request failed after all retries")
+
     def create_test_run(
         self,
         name: str,
@@ -155,7 +187,7 @@ class QAStudioAPIClient:
             "results": [result.to_dict() for result in results],
         }
 
-        response = self._make_request("POST", "/results", json_data=data)
+        response = self._request_with_retry("POST", "/results", json_data=data)
 
         self._log(f"Successfully submitted {len(results)} results")
         return response
@@ -218,45 +250,12 @@ class QAStudioAPIClient:
 
         self._log(f"Uploading attachment: {filename} ({content_type})")
 
-        with open(file_path, "rb") as f:
-            file_data = f.read()
-
-        # Prepare multipart form data
-        fields = {
-            "testResultId": test_result_id,
+        url = f"{self.base_url}/attachments"
+        last_error: Optional[APIError] = None
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "User-Agent": "qastudio-pytest/1.0.0",
         }
-
-        if attachment_type:
-            fields["type"] = attachment_type
-
-        return self._upload_multipart("/attachments", fields, filename, content_type, file_data)
-
-    def _upload_multipart(
-        self,
-        path: str,
-        fields: Dict[str, str],
-        filename: str,
-        content_type: str,
-        file_data: bytes,
-    ) -> Dict[str, Any]:
-        """
-        Upload multipart/form-data request with retry logic.
-
-        Args:
-            path: API endpoint path
-            fields: Form fields
-            filename: Name of file being uploaded
-            content_type: MIME type of file
-            file_data: File content as bytes
-
-        Returns:
-            Response JSON data
-
-        Raises:
-            APIError: If request fails
-        """
-        url = f"{self.base_url}{path}"
-        last_error: Optional[Exception] = None
 
         for attempt in range(self.config.max_retries):
             try:
@@ -264,110 +263,49 @@ class QAStudioAPIClient:
                     self._log(f"Retry attempt {attempt + 1}/{self.config.max_retries}")
                     import time
 
-                    time.sleep(min(1 * (2**attempt), 10))  # Exponential backoff
+                    time.sleep(min(1 * (2**attempt), 10))
 
-                return self._make_multipart_request(url, fields, filename, content_type, file_data)
+                with open(file_path, "rb") as file_handle:
+                    files = {"file": (filename, file_handle, content_type)}
+                    data = {"testResultId": test_result_id}
+                    if attachment_type:
+                        data["type"] = attachment_type
 
-            except APIError as e:
-                last_error = e
-                self._log(f"Upload failed (attempt {attempt + 1}/{self.config.max_retries}): {e}")
+                    response = self.session.post(
+                        url,
+                        files=files,
+                        data=data,
+                        headers=headers,
+                        timeout=self.config.timeout,
+                    )
 
-                # Don't retry on 4xx errors (client errors)
-                if 400 <= e.status_code < 500:
+                if not response.ok:
+                    error_msg = response.text or response.reason
+                    raise APIError(response.status_code, error_msg)
+
+                if response.content:
+                    json_response: Dict[str, Any] = response.json()
+                    return json_response
+                return {}
+
+            except APIError as exc:
+                last_error = exc
+                self._log(f"Upload failed (attempt {attempt + 1}/{self.config.max_retries}): {exc}")
+                if 400 <= exc.status_code < 500:
                     raise
-
-            except Exception as e:
-                last_error = e
-                self._log(f"Upload failed (attempt {attempt + 1}/{self.config.max_retries}): {e}")
+            except requests.exceptions.Timeout as exc:
+                last_error = APIError(408, f"Request timeout: {str(exc)}")
+                self._log(f"Upload failed (attempt {attempt + 1}/{self.config.max_retries}): {exc}")
+            except requests.exceptions.ConnectionError as exc:
+                last_error = APIError(503, f"Connection error: {str(exc)}")
+                self._log(f"Upload failed (attempt {attempt + 1}/{self.config.max_retries}): {exc}")
+            except requests.exceptions.RequestException as exc:
+                last_error = APIError(500, f"Request failed: {str(exc)}")
+                self._log(f"Upload failed (attempt {attempt + 1}/{self.config.max_retries}): {exc}")
 
         if last_error:
             raise last_error
         raise APIError(500, "Upload failed after all retries")
-
-    def _make_multipart_request(
-        self,
-        url: str,
-        fields: Dict[str, str],
-        filename: str,
-        content_type: str,
-        file_data: bytes,
-    ) -> Dict[str, Any]:
-        """
-        Make a multipart/form-data HTTP request.
-
-        Args:
-            url: Full URL to request
-            fields: Form fields (non-file)
-            filename: Name of file being uploaded
-            content_type: MIME type of file
-            file_data: File content as bytes
-
-        Returns:
-            Response JSON data
-
-        Raises:
-            APIError: If request fails
-        """
-        import uuid
-
-        # Generate boundary
-        boundary = f"----FormBoundary{uuid.uuid4().hex}"
-
-        # Build multipart body
-        body_parts = []
-
-        # Add form fields
-        for key, value in fields.items():
-            body_parts.append(f"--{boundary}\r\n".encode())
-            body_parts.append(f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode())
-            body_parts.append(f"{value}\r\n".encode())
-
-        # Add file field
-        body_parts.append(f"--{boundary}\r\n".encode())
-        body_parts.append(
-            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode()
-        )
-        body_parts.append(f"Content-Type: {content_type}\r\n\r\n".encode())
-        body_parts.append(file_data)
-        body_parts.append(b"\r\n")
-
-        # Add closing boundary
-        body_parts.append(f"--{boundary}--\r\n".encode())
-
-        body = b"".join(body_parts)
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-            "User-Agent": "qastudio-pytest/1.0.0",
-        }
-
-        try:
-            response = self.session.request(
-                method="POST",
-                url=url,
-                data=body,
-                headers=headers,
-                timeout=self.config.timeout,
-            )
-
-            # Raise for 4xx/5xx status codes
-            if not response.ok:
-                error_msg = response.text or response.reason
-                raise APIError(response.status_code, error_msg)
-
-            # Return JSON if present
-            if response.content:
-                json_response: Dict[str, Any] = response.json()
-                return json_response
-            return {}
-
-        except requests.exceptions.Timeout as e:
-            raise APIError(408, f"Request timeout: {str(e)}")
-        except requests.exceptions.ConnectionError as e:
-            raise APIError(503, f"Connection error: {str(e)}")
-        except requests.exceptions.RequestException as e:
-            raise APIError(500, f"Request failed: {str(e)}")
 
     def _log(self, message: str) -> None:
         """Log message if verbose mode is enabled."""
