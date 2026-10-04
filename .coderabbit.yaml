@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit Configuration
+# https://docs.coderabbit.ai/reference/configuration
+
+language: en-US
+tone_instructions: 'Be concise and constructive. Expert in Python, pytest plugins, and requests. Focus on silent-mode reliability, hook ordering, and not breaking host test sessions.'
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_placeholder: '@coderabbitai summary'
+  poem: true
+  review_status: true
+  review_details: false
+  review_progress: true
+  commit_status: true
+  collapse_walkthrough: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - main
+      - develop
+    ignore_title_keywords:
+      - WIP
+      - '[WIP]'
+      - DO NOT MERGE
+
+  path_instructions:
+    - path: 'src/qastudio_pytest/plugin.py'
+      instructions: |
+        pytest plugin review:
+        - Hooks: pytest_configure, pytest_sessionstart (tryfirst), pytest_runtest_makereport (hookwrapper), pytest_sessionfinish (trylast)
+        - Collect results on the call phase only
+        - `silent` defaults to True; API failures must not raise into the test session
+        - Batch results (default 10) then upload attachments when enabled
+        - Test linking: `@pytest.mark.qastudio_id`, `test_QA123_*` names, or docstring `QAStudio ID: QA-123`
+        - Prefix user-facing errors with `[QAStudio.dev]`
+        - Do not log API keys
+
+    - path: 'src/qastudio_pytest/api_client.py'
+      instructions: |
+        HTTP client review:
+        - `requests` with Retry on 429/5xx and exponential backoff
+        - Auth header is `Authorization: Bearer <api_key>`
+        - User-Agent `qastudio-pytest/...`
+        - Attachment uploads are multipart/form-data to `/attachments`
+        - Timeouts must come from ReporterConfig.timeout
+
+    - path: 'src/qastudio_pytest/models.py'
+      instructions: |
+        Keep ReporterConfig defaults aligned with docs: environment default, create_test_run True, batch_size 10, upload_attachments True, silent True.
+        Config precedence: CLI > pytest.ini > environment variables.
+
+    - path: 'src/qastudio_pytest/utils.py'
+      instructions: |
+        Cover ANSI stripping, batching, duration formatting, and test-case ID extraction from markers, names, and docstrings.
+
+    - path: 'tests/**/*.py'
+      instructions: |
+        pytest unit tests:
+        - Package tests live under tests/ (currently test_utils.py)
+        - Do not require a live QA Studio instance
+        - Add coverage when changing extraction, batching, or payload mapping
+
+    - path: 'pyproject.toml'
+      instructions: |
+        Tooling in this repo is Black (line length 100), flake8, and mypy. Do not assume Ruff is configured unless pyproject.toml adds it.
+
+  path_filters:
+    - '!**/*.lock'
+    - '!**/package-lock.json'
+    - '!dist/**'
+    - '!build/**'
+    - '!**/*.egg-info/**'
+    - '!venv/**'
+    - '!coverage/**'
+    - '!examples/**'
+
+  tools:
+    biome:
+      enabled: false
+    ruff:
+      enabled: false
+    github-checks:
+      enabled: true
+    gitleaks:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - 'CLAUDE.md'
+      - 'CONTRIBUTING.md'
+      - 'README.md'
+  automatic_linking_mode: auto
+  linked_repositories:
+    - repository: QAStudio-Dev/studio
+      instructions: 'QA Studio public API for /runs, /results, /attachments, and run completion.'
+    - repository: QAStudio-Dev/playwright-reporter
+      instructions: 'Sister Playwright reporter; keep API payload shapes compatible where possible.'
+    - repository: QAStudio-Dev/mcp-server
+      instructions: 'MCP client of the same public API.'

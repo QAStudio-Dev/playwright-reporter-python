@@ -99,7 +99,8 @@ We follow conventional commits:
 1. Update the README.md with details of changes if applicable
 2. Ensure all tests pass and code is properly formatted
 3. Update the CHANGELOG.md if applicable
-4. The PR will be merged once you have the sign-off of a maintainer
+4. Automatic CodeRabbit reviews run for PRs targeting `main` or `develop`, as configured in [`.coderabbit.yaml`](.coderabbit.yaml). Draft PRs and titles containing `WIP` or `DO NOT MERGE` are skipped. Use `@coderabbitai summary` in the PR description to fill in the high-level summary placeholder.
+5. The PR will be merged once you have the sign-off of a maintainer
 
 ## Questions?
 
