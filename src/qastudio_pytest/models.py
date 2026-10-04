@@ -43,7 +43,7 @@ class TestResult:
         """Convert to dictionary for API submission."""
         result: Dict[str, Any] = {
             "title": self.title,
-            "status": self.status.value,
+            "status": "failed" if self.status == TestStatus.ERROR else self.status.value,
             "duration": int(self.duration * 1000),  # Convert to milliseconds
         }
 
@@ -52,16 +52,49 @@ class TestResult:
             result["fullTitle"] = self.full_title
 
         if self.error:
-            result["errorMessage"] = self.error
+            result["errorMessage"] = self._truncate(self.error)
 
         if self.stack_trace:
-            result["stackTrace"] = self.stack_trace
+            result["stackTrace"] = self._truncate(self.stack_trace)
+
+        if self.test_case_id:
+            result["testCaseId"] = self.test_case_id
+
+        if self.error_snippet:
+            result["errorSnippet"] = self._truncate(self.error_snippet)
+
+        if self.error_location:
+            result["errorLocation"] = self.error_location
+
+        if self.steps:
+            result["steps"] = self.steps[:200]
+
+        if self.console_output:
+            result["consoleOutput"] = {
+                key: self._truncate(value, 50000)
+                for key, value in self.console_output.items()
+                if value
+            }
+
+        if self.start_time:
+            result["startTime"] = self.start_time
+
+        if self.end_time:
+            result["endTime"] = self.end_time
 
         # Add attachments array if present
         if self.attachments:
             result["attachments"] = self.attachments
 
         return result
+
+    @staticmethod
+    def _truncate(value: Optional[str], max_len: int = 50000) -> Optional[str]:
+        if not value:
+            return value
+        if len(value) <= max_len:
+            return value
+        return value[:max_len] + "...[truncated]"
 
     @classmethod
     def from_pytest_report(
