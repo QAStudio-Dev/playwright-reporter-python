@@ -7,4 +7,4 @@ qastudio-pytest>=1.0.4
 
 # Additional testing utilities
 pytest>=7.0.0
-pytest-xdist>=3.0.0  # Parallel test execution
+pytest-xdist>=3.8.0  # Parallel test execution
